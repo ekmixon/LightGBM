@@ -278,9 +278,16 @@ def test_random_search():
     n_iter = 3  # Number of samples
     params = dict(subsample=0.8,
                   subsample_freq=1)
-    param_dist = dict(boosting_type=['rf', 'gbdt'],
-                      n_estimators=[np.random.randint(low=3, high=10) for i in range(n_iter)],
-                      reg_alpha=[np.random.uniform(low=0.01, high=0.06) for i in range(n_iter)])
+    param_dist = dict(
+        boosting_type=['rf', 'gbdt'],
+        n_estimators=[
+            np.random.randint(low=3, high=10) for _ in range(n_iter)
+        ],
+        reg_alpha=[
+            np.random.uniform(low=0.01, high=0.06) for _ in range(n_iter)
+        ],
+    )
+
     fit_params = dict(verbose=False,
                       eval_set=[(X_val, y_val)],
                       eval_metric=constant_metric,
@@ -1027,7 +1034,11 @@ def test_first_metric_only():
     iter_valid1_l2 = 18
     iter_valid2_l1 = 11
     iter_valid2_l2 = 7
-    assert len(set([iter_valid1_l1, iter_valid1_l2, iter_valid2_l1, iter_valid2_l2])) == 4
+    assert (
+        len({iter_valid1_l1, iter_valid1_l2, iter_valid2_l1, iter_valid2_l2})
+        == 4
+    )
+
     iter_min_l1 = min([iter_valid1_l1, iter_valid2_l1])
     iter_min_l2 = min([iter_valid1_l2, iter_valid2_l2])
     iter_min = min([iter_min_l1, iter_min_l2])

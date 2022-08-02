@@ -58,10 +58,7 @@ def _get_dask_client(client: Optional[Client]) -> Client:
     client : dask.distributed.Client
         A Dask client.
     """
-    if client is None:
-        return default_client()
-    else:
-        return client
+    return default_client() if client is None else client
 
 
 def _find_n_open_ports(n: int) -> List[int]:

@@ -217,8 +217,11 @@ def early_stopping(stopping_rounds: int, first_metric_only: bool = False, verbos
     first_metric = ['']
 
     def _init(env: CallbackEnv) -> None:
-        enabled[0] = not any(env.params.get(boost_alias, "") == 'dart' for boost_alias
-                             in _ConfigAliases.get("boosting"))
+        enabled[0] = all(
+            env.params.get(boost_alias, "") != 'dart'
+            for boost_alias in _ConfigAliases.get("boosting")
+        )
+
         if not enabled[0]:
             _log_warning('Early stopping is not available in dart mode')
             return
@@ -278,5 +281,6 @@ def early_stopping(stopping_rounds: int, first_metric_only: bool = False, verbos
                         _log_info(f"Evaluated only: {eval_name_splitted[-1]}")
                 raise EarlyStopException(best_iter[i], best_score_list[i])
             _final_iteration_check(env, eval_name_splitted, i)
+
     _callback.order = 30  # type: ignore
     return _callback

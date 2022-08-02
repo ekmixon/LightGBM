@@ -280,10 +280,11 @@ def test_classifier(output, task, boosting_type, tree_learner, cluster):
             "num_leaves": 31
         }
         if boosting_type == 'rf':
-            params.update({
+            params |= {
                 'bagging_freq': 1,
                 'bagging_fraction': 0.9,
-            })
+            }
+
         elif boosting_type == 'goss':
             params['top_rate'] = 0.5
 
@@ -526,10 +527,11 @@ def test_regressor(output, boosting_type, tree_learner, cluster):
             "n_estimators": 20,
         }
         if boosting_type == 'rf':
-            params.update({
+            params |= {
                 'bagging_freq': 1,
                 'bagging_fraction': 0.9,
-            })
+            }
+
 
         dask_regressor = lgb.DaskLGBMRegressor(
             client=client,
@@ -727,10 +729,11 @@ def test_ranker(output, group, boosting_type, tree_learner, cluster):
             "min_child_samples": 1
         }
         if boosting_type == 'rf':
-            params.update({
+            params |= {
                 'bagging_freq': 1,
                 'bagging_fraction': 0.9,
-            })
+            }
+
 
         dask_ranker = lgb.DaskLGBMRanker(
             client=client,

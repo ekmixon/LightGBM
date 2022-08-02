@@ -65,7 +65,7 @@ def _normalize_native_string(func: Callable[[str], None]) -> Callable[[str], Non
     @wraps(func)
     def wrapper(msg: str) -> None:
         nonlocal msg_normalized
-        if msg.strip() == '':
+        if not msg.strip():
             msg = ''.join(msg_normalized)
             msg_normalized = []
             return func(msg)
@@ -90,7 +90,7 @@ def _log_native(msg: str) -> None:
 
 def _log_callback(msg: bytes) -> None:
     """Redirect logs from native library into Python."""
-    _log_native(str(msg.decode('utf-8')))
+    _log_native(msg.decode('utf-8'))
 
 
 def _load_lib():
@@ -151,9 +151,7 @@ def is_numpy_column_array(data):
 
 def cast_numpy_array_to_dtype(array, dtype):
     """Cast numpy array to given dtype."""
-    if array.dtype == dtype:
-        return array
-    return array.astype(dtype=dtype, copy=False)
+    return array if array.dtype == dtype else array.astype(dtype=dtype, copy=False)
 
 
 def is_1d_list(data):
@@ -283,10 +281,8 @@ def param_dict_to_str(data):
     for key, val in data.items():
         if isinstance(val, (list, tuple, set)) or is_numpy_1d_array(val):
             def to_string(x):
-                if isinstance(x, list):
-                    return f"[{','.join(map(str, x))}]"
-                else:
-                    return str(x)
+                return f"[{','.join(map(str, x))}]" if isinstance(x, list) else str(x)
+
             pairs.append(f"{key}={','.join(map(to_string, val))}")
         elif isinstance(val, (str, Path, NUMERIC_TYPES)) or is_numeric(val):
             pairs.append(f"{key}={val}")
@@ -444,22 +440,13 @@ def _choose_param_value(main_param_name: str, params: Dict[str, Any], default_va
     # avoid side effects on passed-in parameters
     params = deepcopy(params)
 
-    # find a value, and remove other aliases with .pop()
-    # prefer the value of 'main_param_name' if it exists, otherwise search the aliases
-    found_value = None
-    if main_param_name in params.keys():
-        found_value = params[main_param_name]
-
+    found_value = params.get(main_param_name)
     for param in _ConfigAliases.get(main_param_name):
         val = params.pop(param, None)
         if found_value is None and val is not None:
             found_value = val
 
-    if found_value is not None:
-        params[main_param_name] = found_value
-    else:
-        params[main_param_name] = default_value
-
+    params[main_param_name] = default_value if found_value is None else found_value
     return params
 
 
@@ -501,11 +488,14 @@ FEATURE_IMPORTANCE_TYPE_MAPPER = {"split": C_API_FEATURE_IMPORTANCE_SPLIT,
 
 def convert_from_sliced_object(data):
     """Fix the memory of multi-dimensional sliced object."""
-    if isinstance(data, np.ndarray) and isinstance(data.base, np.ndarray):
-        if not data.flags.c_contiguous:
-            _log_warning("Usage of np.ndarray subset (sliced data) is not recommended "
-                         "due to it will double the peak memory cost in LightGBM.")
-            return np.copy(data)
+    if (
+        isinstance(data, np.ndarray)
+        and isinstance(data.base, np.ndarray)
+        and not data.flags.c_contiguous
+    ):
+        _log_warning("Usage of np.ndarray subset (sliced data) is not recommended "
+                     "due to it will double the peak memory cost in LightGBM.")
+        return np.copy(data)
     return data
 
 
@@ -513,19 +503,18 @@ def c_float_array(data):
     """Get pointer of float numpy array / list."""
     if is_1d_list(data):
         data = np.array(data, copy=False)
-    if is_numpy_1d_array(data):
-        data = convert_from_sliced_object(data)
-        assert data.flags.c_contiguous
-        if data.dtype == np.float32:
-            ptr_data = data.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
-            type_data = C_API_DTYPE_FLOAT32
-        elif data.dtype == np.float64:
-            ptr_data = data.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
-            type_data = C_API_DTYPE_FLOAT64
-        else:
-            raise TypeError(f"Expected np.float32 or np.float64, met type({data.dtype})")
-    else:
+    if not is_numpy_1d_array(data):
         raise TypeError(f"Unknown type({type(data).__name__})")
+    data = convert_from_sliced_object(data)
+    assert data.flags.c_contiguous
+    if data.dtype == np.float32:
+        ptr_data = data.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+        type_data = C_API_DTYPE_FLOAT32
+    elif data.dtype == np.float64:
+        ptr_data = data.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        type_data = C_API_DTYPE_FLOAT64
+    else:
+        raise TypeError(f"Expected np.float32 or np.float64, met type({data.dtype})")
     return (ptr_data, type_data, data)  # return `data` to avoid the temporary copy is freed
 
 
@@ -533,19 +522,18 @@ def c_int_array(data):
     """Get pointer of int numpy array / list."""
     if is_1d_list(data):
         data = np.array(data, copy=False)
-    if is_numpy_1d_array(data):
-        data = convert_from_sliced_object(data)
-        assert data.flags.c_contiguous
-        if data.dtype == np.int32:
-            ptr_data = data.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
-            type_data = C_API_DTYPE_INT32
-        elif data.dtype == np.int64:
-            ptr_data = data.ctypes.data_as(ctypes.POINTER(ctypes.c_int64))
-            type_data = C_API_DTYPE_INT64
-        else:
-            raise TypeError(f"Expected np.int32 or np.int64, met type({data.dtype})")
-    else:
+    if not is_numpy_1d_array(data):
         raise TypeError(f"Unknown type({type(data).__name__})")
+    data = convert_from_sliced_object(data)
+    assert data.flags.c_contiguous
+    if data.dtype == np.int32:
+        ptr_data = data.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
+        type_data = C_API_DTYPE_INT32
+    elif data.dtype == np.int64:
+        ptr_data = data.ctypes.data_as(ctypes.POINTER(ctypes.c_int64))
+        type_data = C_API_DTYPE_INT64
+    else:
+        raise TypeError(f"Expected np.int32 or np.int64, met type({data.dtype})")
     return (ptr_data, type_data, data)  # return `data` to avoid the temporary copy is freed
 
 
@@ -554,10 +542,17 @@ def _get_bad_pandas_dtypes(dtypes):
                            'int64': 'int', 'uint8': 'int', 'uint16': 'int',
                            'uint32': 'int', 'uint64': 'int', 'bool': 'int',
                            'float16': 'float', 'float32': 'float', 'float64': 'float'}
-    bad_indices = [i for i, dtype in enumerate(dtypes) if (dtype.name not in pandas_dtype_mapper
-                                                           and (not is_dtype_sparse(dtype)
-                                                                or dtype.subtype.name not in pandas_dtype_mapper))]
-    return bad_indices
+    return [
+        i
+        for i, dtype in enumerate(dtypes)
+        if (
+            dtype.name not in pandas_dtype_mapper
+            and (
+                not is_dtype_sparse(dtype)
+                or dtype.subtype.name not in pandas_dtype_mapper
+            )
+        )
+    ]
 
 
 def _data_from_pandas(data, feature_name, categorical_feature, pandas_categorical):
@@ -588,14 +583,13 @@ def _data_from_pandas(data, feature_name, categorical_feature, pandas_categorica
                 categorical_feature = list(categorical_feature)
         if feature_name == 'auto':
             feature_name = list(data.columns)
-        bad_indices = _get_bad_pandas_dtypes(data.dtypes)
-        if bad_indices:
+        if bad_indices := _get_bad_pandas_dtypes(data.dtypes):
             bad_index_cols_str = ', '.join(data.columns[bad_indices])
             raise ValueError("DataFrame.dtypes for data must be int, float or bool.\n"
                              "Did not expect the data types in the following fields: "
                              f"{bad_index_cols_str}")
         data = data.values
-        if data.dtype != np.float32 and data.dtype != np.float64:
+        if data.dtype not in [np.float32, np.float64]:
             data = data.astype(np.float32)
     else:
         if feature_name == 'auto':
@@ -894,7 +888,7 @@ class _InnerPredictor:
             raise ValueError('Input numpy.ndarray or list must be 2 dimensional')
 
         def inner_predict(mat, start_iteration, num_iteration, predict_type, preds=None):
-            if mat.dtype == np.float32 or mat.dtype == np.float64:
+            if mat.dtype in [np.float32, np.float64]:
                 data = np.array(mat.reshape(mat.size), dtype=mat.dtype, copy=False)
             else:  # change non-float data to float data, need to copy
                 data = np.array(mat.reshape(mat.size), dtype=np.float32)
@@ -1492,7 +1486,13 @@ class Dataset:
                          "Pass 'verbose' parameter via 'params' instead.")
         else:
             silent = False
-        if not any(verbose_alias in params for verbose_alias in _ConfigAliases.get("verbosity")) and silent:
+        if (
+            all(
+                verbose_alias not in params
+                for verbose_alias in _ConfigAliases.get("verbosity")
+            )
+            and silent
+        ):
             params["verbose"] = -1
         # get categorical features
         if categorical_feature is not None:
@@ -1599,7 +1599,7 @@ class Dataset:
         indices = self._create_sample_indices(total_nrow)
 
         # Select sampled rows, transpose to column order.
-        sampled = np.array([row for row in self._yield_row_from_seqlist(seqs, indices)])
+        sampled = np.array(list(self._yield_row_from_seqlist(seqs, indices)))
         sampled = sampled.T
 
         filtered = []
@@ -1650,7 +1650,7 @@ class Dataset:
             raise ValueError('Input numpy.ndarray must be 2 dimensional')
 
         self.handle = ctypes.c_void_p()
-        if mat.dtype == np.float32 or mat.dtype == np.float64:
+        if mat.dtype in [np.float32, np.float64]:
             data = np.array(mat.reshape(mat.size), dtype=mat.dtype, copy=False)
         else:  # change non-float data to float data, need to copy
             data = np.array(mat.reshape(mat.size), dtype=np.float32)

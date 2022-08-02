@@ -1133,7 +1133,7 @@ def test_contribs_sparse_multiclass():
         np.testing.assert_allclose(contribs_csc_array, contribs_dense)
 
 
-@pytest.mark.skipif(psutil.virtual_memory().available / 1024 / 1024 / 1024 < 3, reason='not enough RAM')
+@pytest.mark.skipif(psutil.virtual_memory().available < 3221225472, reason='not enough RAM')
 def test_int32_max_sparse_contribs():
     params = {
         'objective': 'binary'
@@ -1144,9 +1144,8 @@ def test_int32_max_sparse_contribs():
     gbm = lgb.train(params, lgb_train, num_boost_round=2)
     csr_input_shape = (3000000, 1000)
     test_features = csr_matrix(csr_input_shape)
-    for i in range(0, csr_input_shape[0], csr_input_shape[0] // 6):
-        for j in range(0, 1000, 100):
-            test_features[i, j] = random.random()
+    for i, j in itertools.product(range(0, csr_input_shape[0], csr_input_shape[0] // 6), range(0, 1000, 100)):
+        test_features[i, j] = random.random()
     y_pred_csr = gbm.predict(test_features, pred_contrib=True)
     # Note there is an extra column added to the output for the expected value
     csr_output_shape = (csr_input_shape[0], csr_input_shape[1] + 1)
@@ -1265,11 +1264,13 @@ def generate_trainset_for_monotone_constraints_tests(x3_to_category=True):
          - scales[4] * x3_negatively_correlated_with_y
          - np.cos(scales[5] * np.pi * x3_negatively_correlated_with_y)
          + zs)
-    categorical_features = []
-    if x3_to_category:
-        categorical_features = [2]
-    trainset = lgb.Dataset(x, label=y, categorical_feature=categorical_features, free_raw_data=False)
-    return trainset
+    categorical_features = [2] if x3_to_category else []
+    return lgb.Dataset(
+        x,
+        label=y,
+        categorical_feature=categorical_features,
+        free_raw_data=False,
+    )
 
 
 @pytest.mark.parametrize("test_with_categorical_variable", [True, False])
@@ -1318,7 +1319,7 @@ def test_monotone_constraints(test_with_categorical_variable):
             for tree in tree_str:
                 # split_features are in 4th line.
                 features = tree.splitlines()[3].split("=")[1].split(" ")
-                features = set(f"Column_{f}" for f in features)
+                features = {f"Column_{f}" for f in features}
                 feature_sets.append(features)
             return np.array(feature_sets)
 
@@ -1544,7 +1545,7 @@ def check_constant_features(y_true, expected_pred, more_params):
         'min_data_in_bin': 1,
         'boost_from_average': True
     }
-    params.update(more_params)
+    params |= more_params
     lgb_train = lgb.Dataset(X_train, y_train, params=params)
     gbm = lgb.train(params, lgb_train, num_boost_round=2)
     pred = gbm.predict(X_train)
@@ -1841,12 +1842,12 @@ def test_metrics():
     for na_alias in ('None', 'na', 'null', 'custom'):
         params = {'objective': 'binary', 'metric': na_alias, 'verbose': -1}
         train_booster(params=params)
-        assert len(evals_result) == 0
+        assert not evals_result
 
     # fobj, no feval
     # no default metric
     train_booster(params=params_verbose, fobj=dummy_obj)
-    assert len(evals_result) == 0
+    assert not evals_result
 
     # metric in params
     train_booster(params=params_metric_log_verbose, fobj=dummy_obj)

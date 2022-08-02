@@ -239,10 +239,7 @@ def train(
         _log_warning("'verbose_eval' argument is deprecated and will be removed in a future release of LightGBM. "
                      "Pass 'log_evaluation()' callback via 'callbacks' argument instead.")
     else:
-        if callbacks:  # assume user has already specified log_evaluation callback
-            verbose_eval = False
-        else:
-            verbose_eval = True
+        verbose_eval = not callbacks
     if verbose_eval is True:
         callbacks.add(callback.log_evaluation())
     elif isinstance(verbose_eval, int):
@@ -372,31 +369,32 @@ def _make_n_folds(full_data, folds, nfold, params, seed, fpreproc=None, stratifi
             else:
                 flatted_group = np.zeros(num_data, dtype=np.int32)
             folds = folds.split(X=np.empty(num_data), y=full_data.get_label(), groups=flatted_group)
-    else:
-        if any(params.get(obj_alias, "") in {"lambdarank", "rank_xendcg", "xendcg",
+    elif any(params.get(obj_alias, "") in {"lambdarank", "rank_xendcg", "xendcg",
                                              "xe_ndcg", "xe_ndcg_mart", "xendcg_mart"}
                for obj_alias in _ConfigAliases.get("objective")):
-            if not SKLEARN_INSTALLED:
-                raise LightGBMError('scikit-learn is required for ranking cv')
-            # ranking task, split according to groups
-            group_info = np.array(full_data.get_group(), dtype=np.int32, copy=False)
-            flatted_group = np.repeat(range(len(group_info)), repeats=group_info)
-            group_kfold = _LGBMGroupKFold(n_splits=nfold)
-            folds = group_kfold.split(X=np.empty(num_data), groups=flatted_group)
-        elif stratified:
-            if not SKLEARN_INSTALLED:
-                raise LightGBMError('scikit-learn is required for stratified cv')
-            skf = _LGBMStratifiedKFold(n_splits=nfold, shuffle=shuffle, random_state=seed)
-            folds = skf.split(X=np.empty(num_data), y=full_data.get_label())
-        else:
-            if shuffle:
-                randidx = np.random.RandomState(seed).permutation(num_data)
-            else:
-                randidx = np.arange(num_data)
-            kstep = int(num_data / nfold)
-            test_id = [randidx[i: i + kstep] for i in range(0, num_data, kstep)]
-            train_id = [np.concatenate([test_id[i] for i in range(nfold) if k != i]) for k in range(nfold)]
-            folds = zip(train_id, test_id)
+        if not SKLEARN_INSTALLED:
+            raise LightGBMError('scikit-learn is required for ranking cv')
+        # ranking task, split according to groups
+        group_info = np.array(full_data.get_group(), dtype=np.int32, copy=False)
+        flatted_group = np.repeat(range(len(group_info)), repeats=group_info)
+        group_kfold = _LGBMGroupKFold(n_splits=nfold)
+        folds = group_kfold.split(X=np.empty(num_data), groups=flatted_group)
+    elif stratified:
+        if not SKLEARN_INSTALLED:
+            raise LightGBMError('scikit-learn is required for stratified cv')
+        skf = _LGBMStratifiedKFold(n_splits=nfold, shuffle=shuffle, random_state=seed)
+        folds = skf.split(X=np.empty(num_data), y=full_data.get_label())
+    else:
+        randidx = (
+            np.random.RandomState(seed).permutation(num_data)
+            if shuffle
+            else np.arange(num_data)
+        )
+
+        kstep = int(num_data / nfold)
+        test_id = [randidx[i: i + kstep] for i in range(0, num_data, kstep)]
+        train_id = [np.concatenate([test_id[i] for i in range(nfold) if k != i]) for k in range(nfold)]
+        folds = zip(train_id, test_id)
 
     ret = CVBooster()
     for train_idx, test_idx in folds:
@@ -421,10 +419,7 @@ def _agg_cv_result(raw_results, eval_train_metric=False):
     metric_type = {}
     for one_result in raw_results:
         for one_line in one_result:
-            if eval_train_metric:
-                key = f"{one_line[0]} {one_line[1]}"
-            else:
-                key = one_line[1]
+            key = f"{one_line[0]} {one_line[1]}" if eval_train_metric else one_line[1]
             metric_type[key] = one_line[3]
             cvmap.setdefault(key, [])
             cvmap[key].append(one_line[2])

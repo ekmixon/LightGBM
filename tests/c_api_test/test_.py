@@ -36,10 +36,7 @@ def find_lib_path():
 
 def LoadDll():
     lib_path = find_lib_path()
-    if len(lib_path) == 0:
-        return None
-    lib = ctypes.cdll.LoadLibrary(lib_path[0])
-    return lib
+    return None if len(lib_path) == 0 else ctypes.cdll.LoadLibrary(lib_path[0])
 
 
 LIB = LoadDll()
@@ -57,9 +54,7 @@ def c_str(string):
 
 
 def load_from_file(filename, reference):
-    ref = None
-    if reference is not None:
-        ref = reference
+    ref = reference if reference is not None else None
     handle = ctypes.c_void_p()
     LIB.LGBM_DatasetCreateFromFile(
         c_str(str(filename)),
@@ -84,10 +79,7 @@ def load_from_csr(filename, reference):
     csr = sparse.csr_matrix(data[:, 1:])
     label = data[:, 0].astype(np.float32)
     handle = ctypes.c_void_p()
-    ref = None
-    if reference is not None:
-        ref = reference
-
+    ref = reference if reference is not None else None
     LIB.LGBM_DatasetCreateFromCSR(
         csr.indptr.ctypes.data_as(ctypes.POINTER(ctypes.c_int32)),
         ctypes.c_int(dtype_int32),
@@ -119,10 +111,7 @@ def load_from_csc(filename, reference):
     csc = sparse.csc_matrix(data[:, 1:])
     label = data[:, 0].astype(np.float32)
     handle = ctypes.c_void_p()
-    ref = None
-    if reference is not None:
-        ref = reference
-
+    ref = reference if reference is not None else None
     LIB.LGBM_DatasetCreateFromCSC(
         csc.indptr.ctypes.data_as(ctypes.POINTER(ctypes.c_int32)),
         ctypes.c_int(dtype_int32),
@@ -155,10 +144,7 @@ def load_from_mat(filename, reference):
     mat = mat[:, 1:]
     data = np.array(mat.reshape(mat.size), dtype=np.float64, copy=False)
     handle = ctypes.c_void_p()
-    ref = None
-    if reference is not None:
-        ref = reference
-
+    ref = reference if reference is not None else None
     LIB.LGBM_DatasetCreateFromMat(
         data.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
         ctypes.c_int(dtype_float64),

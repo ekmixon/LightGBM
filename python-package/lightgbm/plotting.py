@@ -225,12 +225,11 @@ def plot_split_value_histogram(
     ax : matplotlib.axes.Axes
         The plot with specified model's feature split value histogram.
     """
-    if MATPLOTLIB_INSTALLED:
-        import matplotlib.pyplot as plt
-        from matplotlib.ticker import MaxNLocator
-    else:
+    if not MATPLOTLIB_INSTALLED:
         raise ImportError('You must install matplotlib and restart your session to plot split value histogram.')
 
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import MaxNLocator
     if isinstance(booster, LGBMModel):
         booster = booster.booster_
     elif not isinstance(booster, Booster):
@@ -364,15 +363,15 @@ def plot_metric(
 
     name = next(dataset_names)  # take one as sample
     metrics_for_one = eval_results[name]
-    num_metric = len(metrics_for_one)
     if metric is None:
+        num_metric = len(metrics_for_one)
         if num_metric > 1:
             _log_warning("More than one metric available, picking one to plot.")
         metric, results = metrics_for_one.popitem()
-    else:
-        if metric not in metrics_for_one:
-            raise KeyError('No given metric in eval results.')
+    elif metric in metrics_for_one:
         results = metrics_for_one[metric]
+    else:
+        raise KeyError('No given metric in eval results.')
     num_iteration = len(results)
     max_result = max(results)
     min_result = min(results)
@@ -582,11 +581,7 @@ def create_tree_digraph(
 
     model = booster.dump_model()
     tree_infos = model['tree_info']
-    if 'feature_names' in model:
-        feature_names = model['feature_names']
-    else:
-        feature_names = None
-
+    feature_names = model['feature_names'] if 'feature_names' in model else None
     monotone_constraints = model.get('monotone_constraints', None)
 
     if tree_index < len(tree_infos):
@@ -597,10 +592,15 @@ def create_tree_digraph(
     if show_info is None:
         show_info = []
 
-    graph = _to_graphviz(tree_info, show_info, feature_names, precision,
-                         orientation, monotone_constraints, **kwargs)
-
-    return graph
+    return _to_graphviz(
+        tree_info,
+        show_info,
+        feature_names,
+        precision,
+        orientation,
+        monotone_constraints,
+        **kwargs
+    )
 
 
 def plot_tree(
@@ -668,12 +668,11 @@ def plot_tree(
     ax : matplotlib.axes.Axes
         The plot with single tree.
     """
-    if MATPLOTLIB_INSTALLED:
-        import matplotlib.image as image
-        import matplotlib.pyplot as plt
-    else:
+    if not MATPLOTLIB_INSTALLED:
         raise ImportError('You must install matplotlib and restart your session to plot tree.')
 
+    import matplotlib.image as image
+    import matplotlib.pyplot as plt
     if ax is None:
         if figsize is not None:
             _check_not_tuple_of_2_elements(figsize, 'figsize')
